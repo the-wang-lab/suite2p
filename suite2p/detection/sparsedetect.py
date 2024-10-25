@@ -683,7 +683,6 @@ def sparsery(
         Width of spatial low-pass filter in pixels
     batch_size : int    
         Frames in each bin
-        If use_auto_thresh is true, set it to 2
     spatial_scale : int
         If > 0, use this as the spatial scale, otherwise estimate it
     threshold_scaling : float
@@ -772,12 +771,6 @@ def sparsery(
     save_array("mean_img.npy", mov.mean(axis=0))
     save_array("max_img.npy", mov.max(axis=0))
 
-    # high-pass filter movie
-    mov = utils.temporal_high_pass_filter(mov=mov, width=int(high_pass), use_overlapping=use_overlapping)
-    new_ops["max_proj"] = mov.max(axis=0)
-    save_array("mean_img_hp.npy", mov.mean(axis=0))
-    save_array("max_img_hp.npy", mov.max(axis=0))
-
     if use_alt_norm:
         # rolling max filter:
         if rolling == 'max':
@@ -794,6 +787,12 @@ def sparsery(
         save_array("mean_lp.npy", mov.mean(axis=0))
         save_array("max_lp.npy", mov.max(axis=0))
 
+        # high-pass filter movie
+        mov = utils.temporal_high_pass_filter(mov=mov, width=int(high_pass), use_overlapping=use_overlapping)
+        new_ops["max_proj"] = mov.max(axis=0)
+        save_array("mean_img_hp.npy", mov.mean(axis=0))
+        save_array("max_img_hp.npy", mov.max(axis=0))
+
         # normalization
         if norm == 'max':  # do not use max-min for normalization, because it can move the mean value away from 0
             # Find the maximum pixel intensity across the entire image stack
@@ -804,7 +803,7 @@ def sparsery(
             mov_norm = mov / np.max(max_min_intensity)
         else:  # default norm == 'sd'
             # Normalize each pixel by the standard deviation over time
-            mov_sd_mov = utils.standard_deviation_over_time(mov, batch_size=2)
+            mov_sd_mov = utils.standard_deviation_over_time(mov, batch_size=int(high_pass))
             mov_norm = mov / mov_sd_mov
 
         # save_array("mov_max_intensity", mov_max_intensity)
@@ -812,6 +811,12 @@ def sparsery(
         save_array("mean_norm.npy", mov_norm.mean(axis=0))
         save_array("max_norm.npy", mov_norm.max(axis=0))
     else:
+        # high-pass filter movie
+        mov = utils.temporal_high_pass_filter(mov=mov, width=int(high_pass), use_overlapping=use_overlapping)
+        new_ops["max_proj"] = mov.max(axis=0)
+        save_array("mean_img_hp.npy", mov.mean(axis=0))
+        save_array("max_img_hp.npy", mov.max(axis=0))
+
         # normalize by standard deviation
         mov_sd = utils.standard_deviation_over_time(mov, batch_size=batch_size)
         mov_norm = mov / mov_sd
@@ -828,14 +833,12 @@ def sparsery(
     # automatically choose thresh_peak_norm and thresh_act_pix based on the mean and sd of mov_norm
     thresh_peak_norm = 0  # only used when use_auto_thresh is true
     if use_auto_thresh:
-        # set batch_size to 2 for automatic threshold calculation
-        batch_size = 2
         # calculate mean of mov_norm for each pixel
         mov_mean = np.mean(mov_norm, axis=0)
         # calculate mean of mov_norm across all the pixels
         mean_mov_mean = np.mean(mov_mean)
         # calculate standard deviation of mov_norm for each pixel
-        mov_sd1 = utils.standard_deviation_over_time(mov_norm, batch_size=batch_size)
+        mov_sd1 = utils.standard_deviation_over_time(mov_norm, batch_size=int(high_pass))
         # calculate mean of the standard deviation of all the pixels in mov_norm
         mean_mov_sd = np.mean(mov_sd1)
         # set a threshold for mov_norm, used in thresholding active frames
@@ -873,7 +876,7 @@ def sparsery(
         # calculate mean of mean_mov_down_mean across all the pixels
         mean_mov_down_mean = np.mean(mov_norm_down_mean)
         # calculate standard deviation of mov_norm_down for each pixel for the selected spatial scale
-        mov_norm_down_sd = utils.standard_deviation_over_time(mov_norm_down[spatial_scale], batch_size=batch_size)
+        mov_norm_down_sd = utils.standard_deviation_over_time(mov_norm_down[spatial_scale], batch_size=int(high_pass))
         # Calculate mean of the standard deviation of all the pixels in mov_norm_down for the selected spatial scale
         mean_mov_down_sd = np.mean(mov_norm_down_sd)
         # Set a threshold for mov_norm_down, used in threshold_reduce()
