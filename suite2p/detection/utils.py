@@ -243,6 +243,37 @@ def mean_filter(mov: np.ndarray, width: int) -> np.ndarray:
         mov[i, :, :] = mov[i:i + width, :, :].mean(axis=0)
     return mov
 
+
+def median_filter(mov: np.ndarray, width: int) -> np.ndarray:
+    """
+    Returns a filtered copy of the 3D array "mov" using a rolling median kernel over time.
+
+    Parameters
+    ----------
+    mov: nImg x Ly x Lx
+        The frames to filter
+    width: int
+        The filter width
+
+    Returns
+    -------
+    filtered_mov: nImg x Ly x Lx
+        The filtered frames
+
+    """
+    mov_out = mov.copy()
+    half_width = width // 2
+
+    # Loop through each frame
+    for i in range(mov.shape[0]):
+        # Define the range of frames to consider for the median
+        start_idx = max(0, i - half_width)
+        end_idx = min(mov.shape[0], i + half_width + 1)
+
+        mov_out[i, :, :] = np.median(mov[start_idx:end_idx, :, :], axis=0)
+    return mov_out
+
+
 def standard_deviation_over_time(mov: np.ndarray, batch_size: int) -> np.ndarray:
     """
     Returns standard deviation of difference between pixels across time, computed in batches of batch_size.

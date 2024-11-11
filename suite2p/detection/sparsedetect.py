@@ -212,7 +212,11 @@ def iter_extend(ypix, xpix, mov, Lyc, Lxc, active_frames, thresh_active, is_cons
         ypix, xpix = extendROI(ypix, xpix, Lyc, Lxc, 1)
 
         # mean activity in roi
-        roi_act = mov_act[:, ypix * Lxc + xpix]
+        if is_const_thresh:
+            # since mov has zero mean for each pixel, need to consider both the positive and negative changes when calculating lam
+            roi_act = np.abs(mov_act[:, ypix * Lxc + xpix])
+        else:
+            roi_act = mov_act[:, ypix * Lxc + xpix]
         lam = roi_act.mean(axis=0)
 
         # select active pixels
@@ -777,6 +781,8 @@ def sparsery(
             mov = utils.max_filter(mov=mov, width=int(width))
         if rolling == 'mean':
             mov = utils.mean_filter(mov=mov, width=int(width))
+        if rolling == 'median':
+            mov = utils.median_filter(mov=mov, width=int(width))
         # save_array("rolling_bin.npy", mov)
         save_array("mean_img_hp_rmax.npy", mov.mean(axis=0))
         save_array("max_img_hp_rmax.npy", mov.max(axis=0))
@@ -803,7 +809,7 @@ def sparsery(
             mov_norm = mov / np.max(max_min_intensity)
         else:  # default norm == 'sd'
             # Normalize each pixel by the standard deviation over time
-            mov_sd_mov = utils.standard_deviation_over_time(mov, batch_size=int(high_pass))
+            mov_sd_mov = np.std(mov, axis=0)
             mov_norm = mov / mov_sd_mov
 
         # save_array("mov_max_intensity", mov_max_intensity)
@@ -838,7 +844,7 @@ def sparsery(
         # calculate mean of mov_norm across all the pixels
         mean_mov_mean = np.mean(mov_mean)
         # calculate standard deviation of mov_norm for each pixel
-        mov_sd1 = utils.standard_deviation_over_time(mov_norm, batch_size=int(high_pass))
+        mov_sd1 = np.std(mov_norm, axis=0)
         # calculate mean of the standard deviation of all the pixels in mov_norm
         mean_mov_sd = np.mean(mov_sd1)
         # set a threshold for mov_norm, used in thresholding active frames
@@ -876,7 +882,7 @@ def sparsery(
         # calculate mean of mean_mov_down_mean across all the pixels
         mean_mov_down_mean = np.mean(mov_norm_down_mean)
         # calculate standard deviation of mov_norm_down for each pixel for the selected spatial scale
-        mov_norm_down_sd = utils.standard_deviation_over_time(mov_norm_down[spatial_scale], batch_size=int(high_pass))
+        mov_norm_down_sd = np.std(mov_norm_down[spatial_scale], axis=0)
         # Calculate mean of the standard deviation of all the pixels in mov_norm_down for the selected spatial scale
         mean_mov_down_sd = np.mean(mov_norm_down_sd)
         # Set a threshold for mov_norm_down, used in threshold_reduce()
@@ -983,12 +989,15 @@ def sparsery(
                 thresh_active = min(thresh_peak_norm, np.percentile(roi_corr, percentile))
             else:
                 thresh_active = thresh_peak_norm
+            # since mov_norm has zero mean for each pixel, need to consider both the positive and negative changes when
+            # calculating active frames
+            active_frames = np.flatnonzero(np.logical_or(roi_corr > thresh_active, roi_corr < -thresh_active))
         else:
             if percentile > 0:
                 thresh_active = min(thresh_peak, np.percentile(roi_corr, percentile))
             else:
                 thresh_active = thresh_peak
-        active_frames = np.flatnonzero(roi_corr > thresh_active)
+            active_frames = np.flatnonzero(roi_corr > thresh_active)
 
         # if extract_patches: # get square around seed TODO unused
         #     mask = mov[active_frames].mean(axis=0).reshape(Lyc, Lxc)
@@ -1016,7 +1025,12 @@ def sparsery(
             # correlation of bins with lam within ROI
             roi_corr = mov_norm_roi @ lam
             # reselect active frames
-            active_frames = np.flatnonzero(roi_corr > thresh_active)
+            if use_auto_thresh:
+                # since mov_norm has zero mean for each pixel, need to consider both the positive and negative changes when
+                # calculating active frames
+                active_frames = np.flatnonzero(np.logical_or(roi_corr > thresh_active, roi_corr < -thresh_active))
+            else:
+                active_frames = np.flatnonzero(roi_corr > thresh_active)
 
             active_frames_rec.append(active_frames)
             if not active_frames.size:  # stop ROI extension if no active frames
@@ -1056,10 +1070,16 @@ def sparsery(
         # SUBTRACT ROI FROM DATA
 
         # from original movie:
-        x = np.outer(roi_corr[active_frames], lam)
-        # indices for active frames and pixels in ROI
-        idx = np.ix_(active_frames, xpix + ypix * Lx)
-        mov_norm[idx] -= x
+        if use_auto_thresh:
+            # since mov_normR has zero mean, estimating the pixel values based on lam 
+            # indices for active frames and pixels in ROI
+            idx = np.ix_(active_frames, xpix + ypix * Lx)
+            mov_norm[idx] = 0
+        else:
+            x = np.outer(roi_corr[active_frames], lam)
+            # indices for active frames and pixels in ROI
+            idx = np.ix_(active_frames, xpix + ypix * Lx)
+            mov_norm[idx] -= x
 
         # from downsampled movie:
         # get ypix, xpix, and lam at each downsampled spatial scale
@@ -1078,9 +1098,13 @@ def sparsery(
             )
 
             # same as above
-            x = np.outer(roi_corr[active_frames], lam_d)
-            idx = np.ix_(active_frames, xpix_d + Lx_d * ypix_d)
-            mov_norm_d[idx] -= x
+            if use_auto_thresh:
+                idx = np.ix_(active_frames, xpix_d + Lx_d * ypix_d)
+                mov_norm_d[idx] = 0
+            else:
+                x = np.outer(roi_corr[active_frames], lam_d)
+                idx = np.ix_(active_frames, xpix_d + Lx_d * ypix_d)
+                mov_norm_d[idx] -= x
 
             # update standard deviation
             Mx = mov_norm_d[:, xpix_d + Lx_d * ypix_d]
