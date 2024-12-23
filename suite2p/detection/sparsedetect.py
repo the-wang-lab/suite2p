@@ -1146,7 +1146,7 @@ def sparsery(
                 np.uint8)  # Normalize background
 
             # Save the background and overlay as separate layers in a multi-page TIFF
-            output_path = Path(save_path) / f"overlay_ROI{n}.tif"
+            output_path = Path(save_path) / 'sparsedetect' / f"overlay_ROI{n}.tif"
             imwrite(output_path, [background_uint8, overlay_image_uint8], imagej=True)
 
         if n % 1000 == 0:
