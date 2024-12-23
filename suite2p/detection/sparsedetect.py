@@ -229,11 +229,11 @@ def iter_extend(ypix, xpix, mov, Lyc, Lxc, active_frames, thresh_active, is_cons
 
         pix_act = lam > thresh_lam
 
-        if not np.any(pix_act):  # stop if no pixels are active
-            break
-
         ypix, xpix, lam = ypix[pix_act], xpix[pix_act], lam[pix_act]
         npix_new = ypix.size  # after extension
+
+        if not np.any(pix_act):  # stop if no pixels are active
+            break
 
         if npix_new <= npix_old:  # stop if no pixels were added
             break
@@ -1037,6 +1037,10 @@ def sparsery(
             active_frames_rec.append(active_frames)
             if not active_frames.size:  # stop ROI extension if no active frames
                 break
+
+        if ypix.size < scale_in_pixel(max_scale):
+            print('roi_{n}: number of pixels < {scale_in_pixel(max_scale)}')
+            continue
 
         if not active_frames.size:  # stop ROI detection if no active frames
             break
