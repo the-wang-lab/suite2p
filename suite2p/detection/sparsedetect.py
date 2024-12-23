@@ -18,6 +18,8 @@ from . import utils
 from suite2p.extraction import masks
 from suite2p.detection.stats import ROI
 
+from tifffile import imwrite
+
 
 def neuropil_subtraction(mov: np.ndarray, filter_size: int) -> np.ndarray:
     '''Apply spatial low-pass filter to help ignore neuropil
@@ -1071,7 +1073,7 @@ def sparsery(
 
         # from original movie:
         if use_auto_thresh:
-            # since mov_normR has zero mean, estimating the pixel values based on lam 
+            # since mov_normR has zero mean, estimating the pixel values based on lam
             # indices for active frames and pixels in ROI
             idx = np.ix_(active_frames, xpix + ypix * Lx)
             mov_norm[idx] = 0
@@ -1108,7 +1110,7 @@ def sparsery(
 
             # update standard deviation
             Mx = mov_norm_d[:, xpix_d + Lx_d * ypix_d]
-            x = (Mx ** 2 * (Mx > thresh_active)).sum(axis=0) ** 0.5
+            x = (Mx ** 2 * (Mx > thresh_peak)).sum(axis=0) ** 0.5
             mov_norm_sd_d[ypix_d, xpix_d] = x
 
         # multiply lam with the normalization factor used at the normalization step
@@ -1128,6 +1130,24 @@ def sparsery(
             "footprint": max_scale_per_roi[n],
             "act_frames": act_frames
         })
+
+        if save_path:
+            # Create a blank RGBA image for the overlay
+            overlay_image = np.zeros((*mov_norm_sd_down[0].shape, 4), dtype=np.float32)
+
+            # Populate the overlay image: set red channel to full intensity where lam is positive, and alpha to lam intensity
+            for y, x, weight in zip(ypix_down[0], xpix_down[0], lam_down[0]):
+                overlay_image[y, x, 0] = 1  # Full intensity in red channel
+                overlay_image[y, x, 3] = weight / np.max(weight)  # Normalized weight for alpha channel (transparency)
+
+            # Normalize and prepare the overlay and background for saving
+            overlay_image_uint8 = (overlay_image * 255).astype(np.uint8)  # Convert overlay to uint8 (0-255 range)
+            background_uint8 = (mov_norm_sd_down[0] / np.max(mov_norm_sd_down[0]) * 255).astype(
+                np.uint8)  # Normalize background
+
+            # Save the background and overlay as separate layers in a multi-page TIFF
+            output_path = f"overlay_ROI{n}.tif"
+            imwrite(output_path, [background_uint8, overlay_image_uint8], imagej=True)
 
         if n % 1000 == 0:
             print("%d ROIs, score=%2.2f" % (n, max_val))
