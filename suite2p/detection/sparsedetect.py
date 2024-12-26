@@ -18,7 +18,7 @@ from . import utils
 from suite2p.extraction import masks
 from suite2p.detection.stats import ROI
 
-from tifffile import imwrite
+import matplotlib.pyplot as plt
 
 
 def neuropil_subtraction(mov: np.ndarray, filter_size: int) -> np.ndarray:
@@ -1144,14 +1144,16 @@ def sparsery(
                 overlay_image[y, x, 0] = 1  # Full intensity in red channel
                 overlay_image[y, x, 3] = weight / np.max(weight)  # Normalized weight for alpha channel (transparency)
 
-            # Normalize and prepare the overlay and background for saving
-            overlay_image_uint8 = (overlay_image * 255).astype(np.uint8)  # Convert overlay to uint8 (0-255 range)
-            background_uint8 = (mov_norm_sd_down[0] / np.max(mov_norm_sd_down[0]) * 255).astype(
-                np.uint8)  # Normalize background
+            plt.imshow(mov_norm_sd_down[0], cmap='viridis', aspect='auto')
+            plt.title(f'{n} mov_norm_sd_down1 num_pix {ypix.size}')
+            plt.colorbar()
+            plt.imshow(overlay_image, cmap='jet', alpha=0.5)
+            plt.tight_layout()
 
-            # Save the background and overlay as separate layers in a multi-page TIFF
-            output_path = Path(save_path) / 'sparsedetect' / f"overlay_ROI{n}.tif"
-            imwrite(output_path, [background_uint8, overlay_image_uint8], imagej=True)
+            # Save the background and overlay
+            output_path = output_path = Path(save_path) / 'sparsedetect' / f"overlay_ROI{n}.png"
+            # Save the figure as a PDF
+            plt.savefig(output_path, format='png', dpi=300, bbox_inches="tight")
 
         if n % 1000 == 0:
             print("%d ROIs, score=%2.2f" % (n, max_val))
