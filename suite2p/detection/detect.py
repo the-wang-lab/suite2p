@@ -17,8 +17,11 @@ from .. import default_ops
 def detect(ops, classfile=None):
 
     t0 = time.time()
-    bin_size = int(
-        max(1, ops["nframes"] // ops["nbinned"], np.round(ops["tau"] * ops["fs"])))
+    if ops["wang:bin_size"] > 0:
+        bin_size = ops["wang:bin_size"]
+    else:
+        bin_size = int(
+            max(1, ops["nframes"] // ops["nbinned"], np.round(ops["tau"] * ops["fs"])))
     print("Binning movie in chunks of length %2.2d" % bin_size)
     with BinaryFile(filename=ops["reg_file"], Ly=ops["Ly"], Lx=ops["Lx"]) as f:
         mov = f.bin_movie(
